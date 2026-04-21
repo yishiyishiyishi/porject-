@@ -6,7 +6,7 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 
 ---
 
-## 一、程序部分（本人负责）
+## 一、程序部分（C0k11 负责）
 
 ### 1. 已完成
 
@@ -84,7 +84,7 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 
 ---
 
-## 二、美术部分（需要美术产出）
+## 二、美术部分（yishi 负责）
 
 以下是**可以并行开工**的内容，程序侧框架都已就位，挂上去即可工作。
 
