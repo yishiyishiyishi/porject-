@@ -35,9 +35,14 @@ namespace Game.Framework.Pooling
 
         public T Acquire(Vector3 position, Quaternion rotation)
         {
-            T inst;
-            if (_idle.Count > 0) inst = _idle.Pop();
-            else inst = CreateInstance();
+            T inst = null;
+            // Pop 出的对象可能已被外部 Destroy（Unity 的 "fake null"），循环跳过直到拿到活的，否则新建
+            while (_idle.Count > 0)
+            {
+                var candidate = _idle.Pop();
+                if (candidate != null) { inst = candidate; break; }
+            }
+            if (inst == null) inst = CreateInstance();
 
             var tr = inst.transform;
             tr.SetPositionAndRotation(position, rotation);

@@ -188,6 +188,14 @@
 
 ---
 
+## 新模块审计修复（2026-04-21 第三轮，战斗链 + 视觉 + 池）
+
+1. **HitboxQuery 静态 buffer 再入不安全** —— TakeDamage 回调里若又触发 HitboxQuery（连锁爆炸/二次打击）会覆盖正在遍历的 `_buf`。改为 `_bufPool[_depth]` 深度池 + `_depth` 跟踪，`try/finally` 维护 depth，超深度兜底 new
+2. **DynamicShadow 自击** —— `Physics2D.Raycast` 默认 `queriesStartInColliders=true` 会打到自己，阴影会贴在角色身上。改用 `RaycastNonAlloc` + `hit.rigidbody == _selfRb` 过滤，取最近的非自身命中
+3. **HurtFlash 染白阴影** —— `GetComponentsInChildren<SpriteRenderer>` 会抓到 `~Shadow` 子物体，受击时阴影也变白。约定所有 helper 子物体名以 `~` 开头，HurtFlash 用 StartsWith 过滤
+4. **ObjectPool.Acquire 对 fake null 不鲁棒** —— 池里的对象被外部 Destroy 后 Pop 出来是 Unity fake null，SetActive 会崩。改为 while 循环 Pop 跳过 null，直到拿到活的或新建
+5. **SquashStretch sign 卡死** —— Push 时采样 `localScale.x` 的 sign 存进 `_targetScale`，但如果挤压过程中 Actor 翻转方向，target 还是旧 sign。改为存无符号 `_targetXY`，LateUpdate 每帧重新从当前 localScale 采样 sign 拼出真实 target
+
 ## AI 模块审计修复（2026-04-21 第二轮）
 
 1. **EnemyLocomotion 抖脚** —— `_hasRequestThisTick` 在 FixedTick 里自动清零，帧率低时一个 Tick 周期内多次 FixedTick 会把 input 清成 0 → 敌人走走停停。改为 **指令持久化**（Request/Stop 之间保持不变）

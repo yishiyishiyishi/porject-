@@ -31,15 +31,18 @@ namespace Game.Framework.Visual
         [Tooltip("触发后效果的持续时间上限，超过就强行回弹。")]
         public float maxHoldSeconds = 0.12f;
 
-        private Vector3 _baseScale = Vector3.one;
-        private Vector3 _targetScale = Vector3.one;
+        // _targetXY 记录无符号的挤压/拉伸目标（相对 base），LateUpdate 每帧根据当前 sign 拼出真实 target
+        private Vector3 _baseScale = Vector3.one;       // 根据 base 绝对值
+        private Vector2 _targetXY = Vector2.one;        // 当前目标 xy 比例（正值）
         private float _holdTimer;
 
         private void Awake()
         {
             if (visualTarget == null) visualTarget = transform;
-            _baseScale = visualTarget.localScale;
-            _targetScale = _baseScale;
+            _baseScale = new Vector3(Mathf.Abs(visualTarget.localScale.x),
+                                     Mathf.Abs(visualTarget.localScale.y),
+                                     visualTarget.localScale.z);
+            _targetXY = Vector2.one;
         }
 
         private void LateUpdate()
@@ -47,10 +50,16 @@ namespace Game.Framework.Visual
             if (_holdTimer > 0f)
             {
                 _holdTimer -= Time.deltaTime;
-                if (_holdTimer <= 0f) _targetScale = _baseScale;
+                if (_holdTimer <= 0f) _targetXY = Vector2.one;
             }
+            // 每帧重新采样当前 localScale.x 的 sign —— 这样即使 Actor.SetDirection 在挤压中途翻转方向，
+            // 挤压效果也会立刻跟着新朝向，不会卡在旧 sign 上
+            float sign = Mathf.Sign(visualTarget.localScale.x == 0f ? 1f : visualTarget.localScale.x);
+            Vector3 target = new Vector3(_baseScale.x * _targetXY.x * sign,
+                                         _baseScale.y * _targetXY.y,
+                                         _baseScale.z);
             visualTarget.localScale = Vector3.Lerp(
-                visualTarget.localScale, _targetScale, 1f - Mathf.Exp(-returnSpeed * Time.deltaTime));
+                visualTarget.localScale, target, 1f - Mathf.Exp(-returnSpeed * Time.deltaTime));
         }
 
         /// <summary>起跳：瞬间拉高。</summary>
@@ -67,12 +76,10 @@ namespace Game.Framework.Visual
         /// <summary>急停 / 急转。</summary>
         public void TriggerTurn() => Push(turnScale);
 
-        /// <summary>自定义一次缩放事件。</summary>
+        /// <summary>自定义一次缩放事件。xy 为相对 base 的比例（正值），方向 sign 在 LateUpdate 实时采样。</summary>
         public void Push(Vector2 xyScale)
         {
-            // 保留 Direction 翻转（localScale.x 正负由 Actor.SetDirection 翻）
-            float sign = Mathf.Sign(visualTarget.localScale.x == 0f ? 1f : visualTarget.localScale.x);
-            _targetScale = new Vector3(_baseScale.x * xyScale.x * sign, _baseScale.y * xyScale.y, _baseScale.z);
+            _targetXY = new Vector2(Mathf.Abs(xyScale.x), Mathf.Abs(xyScale.y));
             _holdTimer = maxHoldSeconds;
         }
     }

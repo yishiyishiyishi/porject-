@@ -13,8 +13,25 @@ namespace Game.Framework.Combat
     /// </summary>
     public static class HitboxQuery
     {
-        // 复用缓冲，避免每次 OverlapBox 分配
-        private static readonly Collider2D[] _buf = new Collider2D[32];
+        // 再入安全的 buffer 小池：TakeDamage 回调里可能又发起 HitboxQuery（连锁爆炸等），
+        // 深度用 _depth 跟踪，从池里取对应层级的 buffer。超过池深度时退回 new Collider2D[]（罕见、GC 可接受）
+        private const int BufferCapacity = 32;
+        private const int PoolDepth = 4;
+        private static readonly Collider2D[][] _bufPool = InitPool();
+        private static int _depth;
+
+        private static Collider2D[][] InitPool()
+        {
+            var arr = new Collider2D[PoolDepth][];
+            for (int i = 0; i < PoolDepth; i++) arr[i] = new Collider2D[BufferCapacity];
+            return arr;
+        }
+
+        private static Collider2D[] RentBuffer()
+        {
+            if (_depth < PoolDepth) return _bufPool[_depth];
+            return new Collider2D[BufferCapacity]; // 再入太深时兜底分配，不 crash
+        }
 
         /// <summary>
         /// 在世界坐标 center、角度 angle 的 box 范围内查询 Hurtbox，对所有敌对目标造成伤害。
@@ -29,33 +46,52 @@ namespace Game.Framework.Combat
             GameObject attacker,
             HashSet<Hurtbox> alreadyHit = null)
         {
-            int count = Physics2D.OverlapBoxNonAlloc(center, size, angleDeg, _buf, mask);
-            int hits = 0;
-            for (int i = 0; i < count; i++)
+            var buf = RentBuffer();
+            _depth++;
+            int count;
+            try
             {
-                var col = _buf[i];
-                if (col == null) continue;
+                count = Physics2D.OverlapBoxNonAlloc(center, size, angleDeg, buf, mask);
+            }
+            catch
+            {
+                _depth--;
+                throw;
+            }
 
-                // 必须挂 Hurtbox 才算有效目标（普通地形 / 装饰不被误伤）
-                var hb = col.GetComponent<Hurtbox>();
-                if (hb == null) continue;
+            int hits = 0;
+            try
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    var col = buf[i];
+                    if (col == null) continue;
 
-                // 阵营过滤
-                if (!attackerFaction.IsHostile(hb.faction)) continue;
+                    // 必须挂 Hurtbox 才算有效目标（普通地形 / 装饰不被误伤）
+                    var hb = col.GetComponent<Hurtbox>();
+                    if (hb == null) continue;
 
-                // 跨帧去重
-                if (alreadyHit != null && !alreadyHit.Add(hb)) continue;
+                    // 阵营过滤
+                    if (!attackerFaction.IsHostile(hb.faction)) continue;
 
-                var dmg = hb.Damageable;
-                if (dmg == null || !dmg.IsAlive) continue;
+                    // 跨帧去重
+                    if (alreadyHit != null && !alreadyHit.Add(hb)) continue;
 
-                var info = template;
-                info.hitPoint = center;
-                info.source = attacker;
-                dmg.TakeDamage(info);
+                    var dmg = hb.Damageable;
+                    if (dmg == null || !dmg.IsAlive) continue;
 
-                EventBus.Publish(new HitLanded(attacker, hb.gameObject, center, info.amount));
-                hits++;
+                    var info = template;
+                    info.hitPoint = center;
+                    info.source = attacker;
+                    dmg.TakeDamage(info);
+
+                    EventBus.Publish(new HitLanded(attacker, hb.gameObject, center, info.amount));
+                    hits++;
+                }
+            }
+            finally
+            {
+                _depth--;
             }
             return hits;
         }

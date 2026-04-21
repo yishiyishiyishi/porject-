@@ -53,9 +53,12 @@ namespace Game.Framework.Visual
         public int sortingOrder = -100;
 
         private Transform _shadowTr;
+        private Rigidbody2D _selfRb;                                   // 自身刚体，用于排除自身命中
+        private readonly RaycastHit2D[] _hitBuf = new RaycastHit2D[4]; // 复用缓冲
 
         private void Awake()
         {
+            _selfRb = GetComponent<Rigidbody2D>();
             if (shadowRenderer == null)
             {
                 var go = new GameObject("~Shadow");
@@ -73,20 +76,24 @@ namespace Game.Framework.Visual
         {
             if (shadowRenderer == null || _shadowTr == null) return;
 
-            // 从角色原点向下发射线找地面
-            var hit = Physics2D.Raycast(transform.position, Vector2.down, probeDistance, groundLayer);
-            float groundY;
-            bool hasGround;
-            if (hit.collider != null)
+            // 向下 Raycast 找地面 —— 过滤掉自己的 Rigidbody2D 避免打到自己（默认 queriesStartInColliders=true 时很常见）
+            int n = Physics2D.RaycastNonAlloc(transform.position, Vector2.down, _hitBuf, probeDistance, groundLayer);
+            float groundY = transform.position.y;
+            bool hasGround = false;
+            float closestDist = float.MaxValue;
+            for (int i = 0; i < n; i++)
             {
-                groundY = hit.point.y;
-                hasGround = true;
+                var h = _hitBuf[i];
+                if (h.collider == null) continue;
+                if (_selfRb != null && h.rigidbody == _selfRb) continue; // 自身
+                if (h.distance < closestDist)
+                {
+                    closestDist = h.distance;
+                    groundY = h.point.y;
+                    hasGround = true;
+                }
             }
-            else
-            {
-                groundY = transform.position.y; // 找不到地面时影子直接贴脚下，避免飘到屏幕外
-                hasGround = false;
-            }
+            if (!hasGround) groundY = transform.position.y; // 找不到地面时影子贴脚下，避免飘到屏幕外
 
             float height = Mathf.Max(0f, transform.position.y - groundY);
             float k = Mathf.Clamp01(height / Mathf.Max(0.01f, maxHeight));

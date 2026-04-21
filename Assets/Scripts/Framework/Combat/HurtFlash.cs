@@ -30,7 +30,18 @@ namespace Game.Framework.Combat
             if (_health == null) _health = GetComponentInParent<Health>();
 
             var root = visualTarget != null ? visualTarget : transform;
-            _renderers = root.GetComponentsInChildren<SpriteRenderer>(includeInactive: true);
+            var all = root.GetComponentsInChildren<SpriteRenderer>(includeInactive: true);
+            // 跳过以 "~" 开头的子物体（约定：DynamicShadow 的阴影、其他 helper 都用这个前缀），
+            // 避免影子 / 工具性 SR 也跟着闪白
+            var kept = new System.Collections.Generic.List<SpriteRenderer>(all.Length);
+            for (int i = 0; i < all.Length; i++)
+            {
+                var sr = all[i];
+                if (sr == null) continue;
+                if (sr.name.StartsWith("~")) continue;
+                kept.Add(sr);
+            }
+            _renderers = kept.ToArray();
             _original = new Color[_renderers.Length];
             for (int i = 0; i < _renderers.Length; i++) _original[i] = _renderers[i].color;
         }
