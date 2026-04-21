@@ -84,6 +84,16 @@
 - `LevelLoader` —— 单例，**流程：FadeOut → (可选) AutoSave → LoadSceneAsync(allowSceneActivation=false 卡 0.9) → 激活 → 等一帧 → Teleport 到 SpawnPoint → FadeIn**
 - `LevelPortal` —— Interactable 子类，交互切场景
 
+### Framework/AI（敌人 + NPC）
+- `StateMachine<T>` —— 极简泛型 FSM，`Configure().OnEnter/Tick/FixedTick/Exit`，`TimeInState`、`ReenterState()`（连招用）、`OnTransition` 事件
+- `Health` + `IDamageable` + `DamageInfo` —— 通用血量模块（敌我共用），击退覆写 `linearVelocity`，派发 `ActorDamaged`/`ActorDied`
+- `EnvironmentProbe` —— 前方墙 + 脚下悬崖双 Raycast，`RaycastNonAlloc` + 自身 Rigidbody 过滤防自击
+- `EnemySenses` —— Tag 查玩家，距离/视野/视线遮挡，迟滞环防抖（detection/loseRadius）
+- `EnemyLocomotion` —— `Request(dir, speed)` / `Stop()`，**指令持久化**（指令保持到下一条，不按帧清零，修复了 Tick vs FixedTick 帧率不匹配的抖脚 bug）
+- `EnemyBrain` —— `Patrol/Chase/Attack/Stunned/Dead`，攻击 windup/active/recovery 三段 + `OverlapCircle` 命中，连招走 `FSM.ReenterState()`
+- `EnemyActor` —— Actor 子类 + faction
+- `NpcWanderer` —— NPC Idle/Wander/Talk，`SetTalking(bool)` 对接对话
+
 ### Player
 - `PlayerActor` —— 继承 Actor，GetComponent 缓存 IPlayerInput
 - `MoveModule` —— Order=10，accel/brake/airFactor，尊重 `ActionTag.Move` 阻塞
@@ -141,7 +151,18 @@
 
 ---
 
-## 已做的代码审计修复（2026-04-21）
+## AI 模块审计修复（2026-04-21 第二轮）
+
+1. **EnemyLocomotion 抖脚** —— `_hasRequestThisTick` 在 FixedTick 里自动清零，帧率低时一个 Tick 周期内多次 FixedTick 会把 input 清成 0 → 敌人走走停停。改为 **指令持久化**（Request/Stop 之间保持不变）
+2. **EnemyBrain 连招失效** —— `ChangeState(Attack)` 当前=Attack 时因 equal 检查被吞掉。新加 `StateMachine.ReenterState()`，TickAttack 末段连招改走 ReenterState
+3. **EnemyBrain `_attackFired` 泄漏** —— 硬直打断攻击后 `_attackFired=true` 没复位，再次进入 Attack 会跳过 active 帧。改为在 Attack.OnEnter 复位
+4. **EnemyBrain TickChase 丢目标不停步** —— `if (Target == null) return;` 早返回但上一条 Request 还在，敌人会朝空气走。加 `_loco.Stop()`
+5. **EnemyBrain TickPatrol 用 Time.deltaTime** —— 无视 Actor.LocalTimeScale，未来做命中定格 / 时间膨胀时敌人不会随之减速。改用 FSM 传入的 dt
+6. **EnvironmentProbe 自击** —— `Physics2D.Raycast` 默认受 `queriesStartInColliders` 影响，射线起点在自身 Collider 内会打中自己。改用 `RaycastNonAlloc` + 过滤 `rigidbody == State.Rb`
+
+---
+
+## 已做的代码审计修复（2026-04-21 第一轮）
 
 1. **EventBus.Publish** 改为 `GetInvocationList()` 逐个 try/catch —— 单订阅者异常不再级联掐断整条事件链
 2. **NarrativeRuntime** 单例改用独立 `_instance` 字段严格判定 —— 之前 `State != stateAsset` 判式在同一 SO 重复 Awake 时会放行，导致 `Subscribe<MetaLoaded>` 重复订阅、事件二次触发

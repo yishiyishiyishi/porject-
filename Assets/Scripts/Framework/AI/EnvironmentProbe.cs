@@ -37,6 +37,9 @@ namespace Game.Framework.AI
 
         public override int Order => -90;
 
+        // 复用缓冲区，避免 Raycast 的 GC。4 个足够过滤自己 + 前方障碍。
+        private readonly RaycastHit2D[] _hitBuf = new RaycastHit2D[4];
+
         public override void FixedTick(float dt)
         {
             int dir = State.Direction == 0 ? 1 : State.Direction;
@@ -44,16 +47,26 @@ namespace Game.Framework.AI
             // Wall
             Vector2 wallOrigin = (Vector2)transform.position
                                + new Vector2(wallProbeOrigin.x * dir, wallProbeOrigin.y);
-            var wallHit = Physics2D.Raycast(wallOrigin, Vector2.right * dir,
-                                            wallProbeDistance, wallLayer);
-            HasWallAhead = wallHit.collider != null;
+            HasWallAhead = FirstHitExcludingSelf(wallOrigin, Vector2.right * dir, wallProbeDistance, wallLayer);
 
             // Ledge
             Vector2 ledgeOrigin = (Vector2)transform.position
                                 + new Vector2(ledgeProbeOriginOffset.x * dir, ledgeProbeOriginOffset.y);
-            var groundHit = Physics2D.Raycast(ledgeOrigin, Vector2.down,
-                                              ledgeProbeDistance, groundLayer);
-            HasGroundAhead = groundHit.collider != null;
+            HasGroundAhead = FirstHitExcludingSelf(ledgeOrigin, Vector2.down, ledgeProbeDistance, groundLayer);
+        }
+
+        /// <summary>排除敌人自己身上的 Collider（queriesStartInColliders=true 时常见的自击问题）。</summary>
+        private bool FirstHitExcludingSelf(Vector2 origin, Vector2 dir, float dist, LayerMask mask)
+        {
+            int n = Physics2D.RaycastNonAlloc(origin, dir, _hitBuf, dist, mask);
+            for (int i = 0; i < n; i++)
+            {
+                var c = _hitBuf[i].collider;
+                if (c == null) continue;
+                if (State != null && State.Rb != null && _hitBuf[i].rigidbody == State.Rb) continue;
+                return true;
+            }
+            return false;
         }
 
         private void OnDrawGizmosSelected()

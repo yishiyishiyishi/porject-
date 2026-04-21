@@ -56,15 +56,26 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 #### 音频
 - `Framework/Audio/AudioManager` + `AudioCue` + `MusicTrack` + `AudioFilterPreset`：BGM / SE / 滤镜预设。
 
+#### 敌人 / NPC AI（Framework/AI）
+- `StateMachine<T>`：极简泛型 FSM，链式 `Configure(state).OnEnter/OnTick/OnFixedTick/OnExit`，带 `TimeInState`、`ReenterState()`（连招强制重入）、`OnTransition` 事件。
+- `Health` + `IDamageable` + `DamageInfo`：通用血量模块，敌我共用。命中后统一派发 `ActorDamaged`/`ActorDied` 到 EventBus，击退通过 `Rigidbody2D.linearVelocity` 直接赋值。
+- `EnvironmentProbe`：前方墙 + 前方脚下悬崖的 Raycast，`RaycastNonAlloc` + 自身 Rigidbody 过滤，避免自击。
+- `EnemySenses`：按 Tag 查玩家、距离 / 视野夹角 / 可选视线遮挡，带迟滞环（`detectionRadius` 触发、`loseRadius` 脱离）防抖。
+- `EnemyLocomotion`：统一走路接口（`Request(dir, speed)` / `Stop()`），指令持久化不抖脚，墙/悬崖联动自动停步。
+- `EnemyBrain`：`Patrol / Chase / Attack / Stunned / Dead` 五态 FSM，攻击切 `windup / active / recovery` 三段，`OverlapCircle` 命中判定，连招走 `ReenterState()`。
+- `EnemyActor`：Actor 子类 + faction 阵营字段。
+- `NpcWanderer`：NPC 轻量三态（Idle/Wander/Talk），`SetTalking()` 对接对话。
+
 #### 基础设施
-- `Core/EventBus`：泛型事件总线，贯穿所有系统间通信。
+- `Core/EventBus`：泛型事件总线，贯穿所有系统间通信（Publish 逐订阅者 try/catch，单订阅者异常不掐整条链）。
 - `MathTools`：通用数值 / 向量扩展。
 
 ### 2. 待做（程序）
 
 - **相机触发网**：关键转场 / Boss 房 / 剧情机位的 `CameraTrigger` 布点，按 `ZDepth` 规范在场景中实际摆位。
-- **帧级战斗反馈**：命中定格、Time.timeScale 短暂拉低、震屏预设分级（轻/中/重）与统一入口。
-- **完整战斗模块**：攻击判定、受击 / 硬直 / 无敌帧、敌人 AI 基类（目前 Actor 框架已到位，差具体能力模块）。
+- **帧级战斗反馈**：命中定格、`LocalTimeScale` 短暂拉低、震屏预设分级（轻/中/重）与统一入口。
+- **玩家侧攻击**：`PlayerAttackModule` + hitbox，让已有敌人 `Health` 真正挨打；弹反 / 无敌帧。
+- **Enemy Prefab 向导**：`Tools/AI/Create Enemy Template` 一键装配（GroundSensor + Probe + Senses + Loco + Health + Brain + DepthLock）。
 - **对话分支 / 条件 / 变量**：现在 `SimpleDialogueRunner` 只跑线性对白，需补分支与叙事变量接入 `NarrativeState`。
 - **存档自动点**：`PlayerSavePoint` 接入触发器 + UI 反馈；跨场景状态序列化补完。
 - **性能与体积**：URP Renderer Feature 层的体积光 / 大气（等 URP 官方或自写）；4K 下帧生成优化。

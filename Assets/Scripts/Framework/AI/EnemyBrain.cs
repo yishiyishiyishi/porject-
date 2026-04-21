@@ -87,7 +87,7 @@ namespace Game.Framework.AI
             FSM = new StateMachine<EnemyState>(EnemyState.Patrol);
 
             FSM.Configure(EnemyState.Patrol)
-                .OnTick(_ => TickPatrol());
+                .OnTick(dt => TickPatrol(dt));
 
             FSM.Configure(EnemyState.Chase)
                 .OnEnter(() => { /* 可接播警觉音效 / 动画 */ })
@@ -97,6 +97,7 @@ namespace Game.Framework.AI
                 .OnEnter(() =>
                 {
                     _loco.Stop();
+                    _attackFired = false; // 每次进入攻击都要重置，否则硬直打断后再攻击 active 帧会被跳过
                     // 攻击开始朝向玩家
                     if (_senses.Target != null)
                         Actor.SetDirection((int)Mathf.Sign(_senses.Target.position.x - transform.position.x));
@@ -144,11 +145,11 @@ namespace Game.Framework.AI
 
         // ---------- 状态逻辑 ----------
 
-        private void TickPatrol()
+        private void TickPatrol(float dt)
         {
             if (_patrolWaitTimer > 0f)
             {
-                _patrolWaitTimer -= Time.deltaTime;
+                _patrolWaitTimer -= dt; // 用 Actor 的缩放 dt，而不是 Time.deltaTime，保持 LocalTimeScale 生效
                 _loco.Stop();
                 return;
             }
@@ -180,7 +181,7 @@ namespace Game.Framework.AI
 
         private void TickChase()
         {
-            if (_senses.Target == null) return;
+            if (_senses.Target == null) { _loco.Stop(); return; }
             float dx = _senses.Target.position.x - transform.position.x;
             float dir = Mathf.Abs(dx) < 0.05f ? 0f : Mathf.Sign(dx);
             _loco.Request(dir, _loco.chaseSpeed);
@@ -209,9 +210,8 @@ namespace Game.Framework.AI
             }
             else
             {
-                _attackFired = false;
                 // 攻击结束：根据当前感知决定下一步
-                if (_senses.InAttackRange) FSM.ChangeState(EnemyState.Attack); // 连招
+                if (_senses.InAttackRange) FSM.ReenterState(); // 连招：强制重入 Attack，否则 ChangeState(Attack) 会因 equal 检查被忽略
                 else if (_senses.InDetection) FSM.ChangeState(EnemyState.Chase);
                 else FSM.ChangeState(EnemyState.Patrol);
             }

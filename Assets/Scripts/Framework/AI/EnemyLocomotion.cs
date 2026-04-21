@@ -26,7 +26,6 @@ namespace Game.Framework.AI
         private EnvironmentProbe _probe;
         private float _inputDir; // -1/0/1
         private float _targetSpeed;
-        private bool _hasRequestThisTick;
 
         public override int Order => 0;
 
@@ -36,27 +35,21 @@ namespace Game.Framework.AI
             _probe = GetComponent<EnvironmentProbe>();
         }
 
-        /// <summary>由 Brain 在 Tick 中调用。dir 为 -1/0/1，speed 通常用 walkSpeed/chaseSpeed。</summary>
+        /// <summary>由 Brain 调用下达指令，指令保持到下一条 Request / Stop() 为止。
+        /// dir 为 -1/0/1，speed 通常用 walkSpeed / chaseSpeed。</summary>
         public void Request(float dir, float speed)
         {
             _inputDir = Mathf.Sign(dir);
             if (Mathf.Abs(dir) < 0.01f) _inputDir = 0f;
             _targetSpeed = speed;
-            _hasRequestThisTick = true;
         }
 
         public void Stop() => Request(0f, 0f);
 
         public override void FixedTick(float dt)
         {
-            // 如果这一帧 Brain 没发请求，等价于 Stop
-            if (!_hasRequestThisTick)
-            {
-                _inputDir = 0f;
-                _targetSpeed = 0f;
-            }
-            _hasRequestThisTick = false;
-
+            // 指令在 Request/Stop 之间保持不变；不再按 Tick 频率自动清零，否则
+            // 帧率抖动时（多次 FixedTick 打一次 Tick）敌人会抖脚。
             float effectiveDir = _inputDir;
             if (respectEnvironment && _probe != null && effectiveDir != 0f)
             {

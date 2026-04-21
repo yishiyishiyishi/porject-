@@ -70,6 +70,18 @@ namespace Game.Framework.AI
             OnTransition?.Invoke(Previous, Current);
         }
 
+        /// <summary>强制重入当前状态：走一遍 OnExit→OnEnter，TimeInState 归零。
+        /// 用于 ChangeState(Current) 被 equal 检查吞掉的场景（例如攻击连招）。</summary>
+        public void ReenterState()
+        {
+            if (_handlers.TryGetValue(Current, out var h))
+            {
+                h.OnExit?.Invoke();
+                TimeInState = 0f;
+                h.OnEnter?.Invoke();
+            }
+        }
+
         public void Tick(float dt)
         {
             TimeInState += dt;
