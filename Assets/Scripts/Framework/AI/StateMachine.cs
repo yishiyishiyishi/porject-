@@ -26,11 +26,15 @@ namespace Game.Framework.AI
 
         public class StateBuilder
         {
-            internal Handler H;
-            public StateBuilder OnEnter(Action a)              { H.OnEnter      = a; return this; }
-            public StateBuilder OnTick(Action<float> a)        { H.OnTick       = a; return this; }
-            public StateBuilder OnFixedTick(Action<float> a)   { H.OnFixedTick  = a; return this; }
-            public StateBuilder OnExit(Action a)               { H.OnExit       = a; return this; }
+            // H 的类型 Handler 是外层私有嵌套类，所以字段本身必须 private，
+            // 否则 public StateBuilder 暴露一个更私密类型会触发 CS0052。
+            // 外层 StateMachine<T> 作为嵌套类的父类，有权访问此私有字段去赋值。
+            private Handler _h;
+            internal StateBuilder(Handler h) { _h = h; }
+            public StateBuilder OnEnter(Action a)              { _h.OnEnter     = a; return this; }
+            public StateBuilder OnTick(Action<float> a)        { _h.OnTick      = a; return this; }
+            public StateBuilder OnFixedTick(Action<float> a)   { _h.OnFixedTick = a; return this; }
+            public StateBuilder OnExit(Action a)               { _h.OnExit      = a; return this; }
         }
 
         private readonly Dictionary<TState, Handler> _handlers = new();
@@ -50,7 +54,7 @@ namespace Game.Framework.AI
         {
             if (!_handlers.TryGetValue(state, out var h))
                 _handlers[state] = h = new Handler();
-            return new StateBuilder { H = h };
+            return new StateBuilder(h);
         }
 
         public void Start()
