@@ -1,6 +1,7 @@
 using UnityEngine;
 using Game.Framework;
 using Game.Framework.View;
+using Game.Framework.Visual;
 
 namespace Game.Player.Modules
 {
@@ -29,17 +30,31 @@ namespace Game.Player.Modules
 
         private PlayerActor _player;
         private float _coyote;
+        private SquashStretch _squash;    // 可选：起跳/落地视觉反馈
+        private bool _wasGrounded;
+        private float _peakFallSpeed;      // 用落地前的最低 Y 速度估算冲击强度
 
         public override void OnAttach(Actor actor)
         {
             base.OnAttach(actor);
             _player = actor as PlayerActor;
             if (_player == null) Debug.LogError($"[JumpModule] {name} 必须挂在 PlayerActor 上", this);
+            _squash = GetComponent<SquashStretch>(); // 无即 null，行为退化为无反馈
+            _wasGrounded = true;
         }
 
         public override void Tick(float dt)
         {
             _coyote = State.IsGrounded ? coyoteTime : Mathf.Max(0f, _coyote - dt);
+
+            // 落地触发：上一帧空中、当前帧着地
+            if (!_wasGrounded && State.IsGrounded && _squash != null)
+            {
+                float impact = Mathf.InverseLerp(4f, maxFallingSpeed, Mathf.Abs(_peakFallSpeed));
+                _squash.TriggerLand(impact);
+                _peakFallSpeed = 0f;
+            }
+            _wasGrounded = State.IsGrounded;
         }
 
         public override void FixedTick(float dt)
@@ -58,6 +73,7 @@ namespace Game.Player.Modules
                 _coyote = 0f;
                 _player.Input.ConsumeJump();
                 Gate.Block(ActionTag.Jump, 0.1f); // 防止单帧双触发
+                if (_squash != null) _squash.TriggerJump();
             }
             else if (!_player.Input.JumpHeld && v.y > jumpCutSpeed)
             {
@@ -72,6 +88,9 @@ namespace Game.Player.Modules
 
             v.y -= g * dt;
             if (v.y < -maxFallingSpeed) v.y = -maxFallingSpeed;
+
+            // 记录空中最低速度（最负值），落地时用它估算冲击
+            if (!State.IsGrounded && v.y < _peakFallSpeed) _peakFallSpeed = v.y;
 
             State.Velocity = v;
         }

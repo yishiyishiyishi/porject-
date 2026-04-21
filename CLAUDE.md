@@ -84,6 +84,12 @@
 - `LevelLoader` —— 单例，**流程：FadeOut → (可选) AutoSave → LoadSceneAsync(allowSceneActivation=false 卡 0.9) → 激活 → 等一帧 → Teleport 到 SpawnPoint → FadeIn**
 - `LevelPortal` —— Interactable 子类，交互切场景
 
+### Framework/Visual（纸片人防假 + 手感反馈）
+- `DynamicShadow`：脚下椭圆影子 SpriteRenderer，向下 Raycast 找地面，按"离地高度"调整 scale/alpha。横板跳跃也受益；TopDown 主要救命道具。
+- `SquashStretch`：挤压/拉伸。visualTarget 子物体（不改 Actor 根 scale 免影响碰撞），`TriggerJump / TriggerLand(impact01) / TriggerTurn / Push(xyScale)`，指数回弹。保留 localScale.x 方向（防止方向翻转被覆盖）。
+- `YSortModule`：Y 越小 sortingOrder 越大，脚下挡远处。TopDown 必开，横板可关。
+- `JumpModule` 自动检测 `SquashStretch`：起跳 TriggerJump、落地按 _peakFallSpeed 估 impact 触发 TriggerLand（空中累计最低 Y 速度，落地清零）
+
 ### Framework/View（尼尔式视角切换）
 - `ViewMode` 枚举：Side（横版）/ TopDown（俯视）
 - `ViewModeController` 单例，`static Current` 可供任意模块读；`SetMode(mode)` 切换，同时可按配置联动 CameraManager 切相机
@@ -165,6 +171,7 @@
 ## 待做
 
 - 相机触发网（关键转场/Boss 房/剧情机位布点）
+- **TopDown 项目当前优先级降级**：主力横板，TopDown 框架就位但暂不接入；3/4 视角美术 + 脚尘粒子 + 法线贴图那批等横板成型后再回来做
 - **TopDown 相机预设**：在 CameraManager 注册一个俯视 CinemachineCamera（key 如 "TopDown"），填到 `ViewModeController.topDownCameraKey`
 - **给敌人 Hurtbox**：现有敌人接上 `Hurtbox`(faction=Enemy, damageable=Health) 让 PlayerAttackModule 打得到；对称给 Player 挂 `Hurtbox`(faction=Player) + Health
 - **敌人攻击也走 HitboxQuery**：EnemyBrain.PerformAttackHit 目前直接 OverlapCircle + IDamageable，统一成 Hurtbox + HitboxQuery 后可复用去重 / 阵营过滤

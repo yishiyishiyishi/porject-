@@ -66,6 +66,12 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 - `HitStop.Pulse(duration, freezeScale)`：隐藏 DontDestroyOnLoad Driver 协程，`unscaledDeltaTime` 计时把全局 `Time.timeScale` 拉近 0 做打击定格。
 - 和 `ActorState.LocalTimeScale` 搭配：全局冻结用 HitStop，个体慢放 / 时停用 LocalTimeScale。
 
+#### 视觉体积 / 手感（Framework/Visual）
+- `DynamicShadow`：Actor 脚下动态影子，`Raycast` 找地面，离地越远影子越小越淡。横板跳跃立刻就能受益；TopDown 模式下"纸片人"视觉厚度主要靠它救。
+- `SquashStretch`：挤压 / 拉伸视觉反馈。API `TriggerJump / TriggerLand(impact01) / TriggerTurn / Push(xyScale)`，向目标 scale 指数级回弹。**作用于 visualTarget 子物体**，不改 Actor 根 scale 以免影响 Collider。
+- `YSortModule`：按 Y 坐标动态写 `sortingOrder`（Y 越小 order 越大 → 脚下物挡远处物），给 TopDown 俯视做深度排序；横板场景可关。
+- **JumpModule 自动联动**：如果 Actor 上挂了 `SquashStretch`，跳跃会 TriggerJump、落地按空中最低速度换算冲击触发 TriggerLand；没挂则无行为差异。
+
 #### 视角切换（Framework/View，尼尔式横板↔俯视）
 - `ViewMode` 枚举 `Side` / `TopDown`。
 - `ViewModeController`：单例 + `static Current`，`SetMode()` 切换并发 `ViewModeChanged` 到 EventBus；可配 Side/TopDown 对应的 CameraManager key 自动联动相机。
@@ -102,7 +108,8 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 ### 2. 待做（程序）
 
 - **相机触发网**：关键转场 / Boss 房 / 剧情机位的 `CameraTrigger` 布点，按 `ZDepth` 规范在场景中实际摆位。
-- **TopDown 相机预设**：在场景 CameraManager 注册一台俯视 CinemachineCamera（key 如 `TopDown`），填到 `ViewModeController.topDownCameraKey`；目前脚本层就绪，但场景里还没有这台相机。
+- **主攻横板，TopDown 框架放着**：ViewMode / DynamicShadow / YSort 脚本都已就位，但先不摆 TopDown 场景；横板成型稳定后再回来接入 3/4 视角美术。
+- **TopDown 相机预设**（排期后再做）：在场景 CameraManager 注册一台俯视 CinemachineCamera（key 如 `TopDown`），填到 `ViewModeController.topDownCameraKey`；目前脚本层就绪，但场景里还没有这台相机。
 - **给所有 Actor 挂 `Hurtbox`**：现有 Player / Enemy prefab 补挂 `Hurtbox`(faction + IDamageable)，PlayerAttackModule 才能真正打到他们。
 - **敌人攻击也走 HitboxQuery**：`EnemyBrain.PerformAttackHit` 现在是旧版 `OverlapCircle + GetComponent<IDamageable>` 路径，待重构为 Hurtbox / HitboxQuery 统一路径，复用阵营过滤与去重。
 - **无敌帧 / 弹反 / 命中特效**：受击后短暂 I-frame、完美闪避判定、命中粒子 + 残影。
