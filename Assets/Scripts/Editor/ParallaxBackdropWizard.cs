@@ -26,10 +26,15 @@ namespace Framework.Art.EditorTools
     public class ParallaxBackdropWizard : EditorWindow
     {
         private Texture2D _near, _mid, _far;
-        private float _nearZ = -2f, _midZ = 10f, _farZ = 50f;
+        // 默认对齐 ZDepth 三档背景（BackgroundNear=10 / Mid=30 / Far=80）。
+        // 若 Near 槽实际要塞"前景遮挡片"，手动改成 ZDepth.ForegroundNear(-2)。
+        private float _nearZ = ZDepth.BackgroundNear;
+        private float _midZ  = ZDepth.BackgroundMid;
+        private float _farZ  = ZDepth.BackgroundFar;
         private float _extraWidthMul = 1.5f; // 宽度冗余，便于横向滚动
         private string _sortingLayer = "Default";
-        private int _nearOrder = 10, _midOrder = -5, _farOrder = -10;
+        // 近 → 远：sortingOrder 递减，保证同 layer 渲染顺序对
+        private int _nearOrder = 0, _midOrder = -10, _farOrder = -20;
 
         [MenuItem("Tools/Art/Create Parallax Backdrop")]
         public static void Open() => GetWindow<ParallaxBackdropWizard>("Parallax Backdrop").Show();
@@ -37,9 +42,9 @@ namespace Framework.Art.EditorTools
         private void OnGUI()
         {
             EditorGUILayout.LabelField("Layer Textures", EditorStyles.boldLabel);
-            _near = (Texture2D)EditorGUILayout.ObjectField("Near (Foreground)", _near, typeof(Texture2D), false);
-            _mid  = (Texture2D)EditorGUILayout.ObjectField("Mid",                _mid,  typeof(Texture2D), false);
-            _far  = (Texture2D)EditorGUILayout.ObjectField("Far",                _far,  typeof(Texture2D), false);
+            _near = (Texture2D)EditorGUILayout.ObjectField("Near (bg1, 近景)", _near, typeof(Texture2D), false);
+            _mid  = (Texture2D)EditorGUILayout.ObjectField("Mid  (bg2, 中景)", _mid,  typeof(Texture2D), false);
+            _far  = (Texture2D)EditorGUILayout.ObjectField("Far  (bg3, 远景)", _far,  typeof(Texture2D), false);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Z Positions (与 Framework.ZDepth 常量对齐)", EditorStyles.boldLabel);
@@ -64,7 +69,7 @@ namespace Framework.Art.EditorTools
 
             EditorGUILayout.HelpBox(
                 "相机应已是 Perspective（跑过 Tools/Camera/Apply 3D Perspective），脚本会按主相机 FOV 估算缩放。\n" +
-                "Near 若是前景遮挡，记得 PNG 带 Alpha 通道，否则会挡住玩家。",
+                "默认三槽都是背景（Z=10/30/80）。如果 Near 实际是前景遮挡片，手动把 Near Z 改成 -2，并保证 PNG 带 Alpha。",
                 MessageType.Info);
         }
 
