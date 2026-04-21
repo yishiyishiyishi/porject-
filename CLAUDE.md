@@ -70,7 +70,7 @@
 - `UIEvents` —— UIPushed/Popped、UIPauseStateChanged
 - `UIView` —— `[RequireComponent(Canvas)]`，pausesGame、consumesEscape、baseSortingOrder、viewId；virtual OnPushed/Popped/Covered/Revealed
 - `UIManager` —— 单例，`List<UIView>` 栈 + Dictionary 注册表，Push/Pop/PopUntil/PopAll、Get<T>()、ESC 处理、自动 `Time.timeScale` 暂停+恢复
-- Views：`InteractPromptView`（非模态、订阅 InteractCandidateChanged）、`DialogueView`（自动 Push/Pop）、`FadeView`（Instance 单例、CanvasGroup 用 unscaledDeltaTime、sortingOrder=10000）
+- Views：`InteractPromptView`（非模态、订阅 InteractCandidateChanged）、`DialogueView`（自动 Push/Pop）、`FadeView`（Instance 单例、CanvasGroup 用 unscaledDeltaTime、sortingOrder=10000）、`PlayerHealthView`（HP HUD；Assign(Health) 或按 Tag=Player 自动找；白条延迟追平；订阅 ActorSpawned 兜底晚注册）
 
 ### Framework/Audio
 - `AudioCue` SO —— clips[]、volume/pitch jitter、spatialBlend、priority、maxConcurrent
@@ -101,7 +101,9 @@
 - `Faction` 枚举（Player/Enemy/Neutral/None）+ `IsHostile` 扩展
 - `Hurtbox`（挂在可被打的对象上，含 faction + IDamageable 引用）
 - `HitboxQuery.OverlapBox(center, size, angle, mask, attackerFaction, template, attacker, alreadyHit)`：攻击方在 active 帧调，内部 OverlapBoxNonAlloc，过滤同阵营 + 跨帧去重，对目标 TakeDamage 并发 `HitLanded` 事件
+- `HurtFlash`：订阅 sibling Health.OnDamaged，SpriteRenderer 闪白；unscaledDeltaTime 计时确保顿帧期间也看到闪白；敌我通用
 - `Player/PlayerAttackModule`：3 段 windup/active/recovery × N 段连招，输入缓冲接招，active 段每 Tick 重判（支持快速穿过），命中自动顿帧 + 轻震
+- **EnemyBrain 攻击统一 HitboxQuery**：圆形 hitbox 近似方形（2r × 2r），跨帧去重；字段 `attackerFaction` 默认 Enemy
 
 ### Framework/Time（顿帧）
 - `HitStop.Pulse(duration, freezeScale=0.01f)`：隐藏 DontDestroyOnLoad Driver 协程，unscaledDeltaTime 计时，把 Time.timeScale 拉近 0 再恢复，配合 Actor `LocalTimeScale` 做个体 / 全局时间控制
@@ -173,8 +175,7 @@
 - 相机触发网（关键转场/Boss 房/剧情机位布点）
 - **TopDown 项目当前优先级降级**：主力横板，TopDown 框架就位但暂不接入；3/4 视角美术 + 脚尘粒子 + 法线贴图那批等横板成型后再回来做
 - **TopDown 相机预设**：在 CameraManager 注册一个俯视 CinemachineCamera（key 如 "TopDown"），填到 `ViewModeController.topDownCameraKey`
-- **给敌人 Hurtbox**：现有敌人接上 `Hurtbox`(faction=Enemy, damageable=Health) 让 PlayerAttackModule 打得到；对称给 Player 挂 `Hurtbox`(faction=Player) + Health
-- **敌人攻击也走 HitboxQuery**：EnemyBrain.PerformAttackHit 目前直接 OverlapCircle + IDamageable，统一成 Hurtbox + HitboxQuery 后可复用去重 / 阵营过滤
+- **给敌人 + Player Hurtbox**：场景 / prefab 挂 `Hurtbox`(faction + damageable=Health)，敌我才能真正打到对方
 - 无敌帧 / 弹反
 - 对话分支/条件/变量（现在只线性）
 - SavePoint 触发器 + UI 反馈、跨场景状态序列化补完

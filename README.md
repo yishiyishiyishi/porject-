@@ -41,7 +41,7 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 
 #### UI / HUD
 - `Framework/UI/UIManager` + `UIView`：View 注册 / 显隐栈式管理。
-- 现成 View：`DialogueView`（对白 UI）、`FadeView`（黑场转场）、`InteractPromptView`（交互提示）。
+- 现成 View：`DialogueView`（对白 UI）、`FadeView`（黑场转场）、`InteractPromptView`（交互提示）、`PlayerHealthView`（HP HUD + 白条延迟追平）。
 - `Framework/UI/UIEvents`：UI 相关事件定义。
 
 #### 存档 / 读档
@@ -61,6 +61,8 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 - `Faction` 枚举（Player / Enemy / Neutral / None）+ `IsHostile` 扩展，替代字符串阵营避免笔误。
 - `Hurtbox`：挂在可挨打对象上的锚点，含 faction + IDamageable 引用；不参与物理碰撞，只作为 Hitbox 查询的目标标签。
 - `HitboxQuery.OverlapBox`：攻击方 active 帧调一次，内部 `OverlapBoxNonAlloc`，阵营过滤 + 跨帧去重，命中发 `HitLanded` 到 EventBus。
+- `HurtFlash`：订阅同对象 `Health.OnDamaged`，命中瞬间把 SpriteRenderer 染成 flashColor，duration 秒后回原色；unscaled 计时，顿帧期间也能看到闪白。敌我通用。
+- **敌人攻击统一走 HitboxQuery**：`EnemyBrain.PerformAttackHit` 已重构为 `HitboxQuery.OverlapBox`，同阵营不互伤，跨帧去重；`attackerFaction` 字段默认 Enemy。
 
 #### 顿帧 / 时间控制（Framework/Time）
 - `HitStop.Pulse(duration, freezeScale)`：隐藏 DontDestroyOnLoad Driver 协程，`unscaledDeltaTime` 计时把全局 `Time.timeScale` 拉近 0 做打击定格。
@@ -110,8 +112,7 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 - **相机触发网**：关键转场 / Boss 房 / 剧情机位的 `CameraTrigger` 布点，按 `ZDepth` 规范在场景中实际摆位。
 - **主攻横板，TopDown 框架放着**：ViewMode / DynamicShadow / YSort 脚本都已就位，但先不摆 TopDown 场景；横板成型稳定后再回来接入 3/4 视角美术。
 - **TopDown 相机预设**（排期后再做）：在场景 CameraManager 注册一台俯视 CinemachineCamera（key 如 `TopDown`），填到 `ViewModeController.topDownCameraKey`；目前脚本层就绪，但场景里还没有这台相机。
-- **给所有 Actor 挂 `Hurtbox`**：现有 Player / Enemy prefab 补挂 `Hurtbox`(faction + IDamageable)，PlayerAttackModule 才能真正打到他们。
-- **敌人攻击也走 HitboxQuery**：`EnemyBrain.PerformAttackHit` 现在是旧版 `OverlapCircle + GetComponent<IDamageable>` 路径，待重构为 Hurtbox / HitboxQuery 统一路径，复用阵营过滤与去重。
+- **给所有 Actor 挂 `Hurtbox`**：现有 Player / Enemy prefab 补挂 `Hurtbox`(faction + IDamageable)，敌我才能真正打到对方。
 - **无敌帧 / 弹反 / 命中特效**：受击后短暂 I-frame、完美闪避判定、命中粒子 + 残影。
 - **Enemy Prefab 向导**：`Tools/AI/Create Enemy Template` 一键装配（GroundSensor + Probe + Senses + Loco + Health + Hurtbox + Brain + DepthLock）。
 - **对话分支 / 条件 / 变量**：现在 `SimpleDialogueRunner` 只跑线性对白，需补分支与叙事变量接入 `NarrativeState`。

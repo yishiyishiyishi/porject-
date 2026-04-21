@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using UnityEngine;
+using Game.Framework.Combat;
 
 namespace Game.Framework.AI
 {
@@ -29,6 +31,10 @@ namespace Game.Framework.AI
         public Vector2 attackHitboxOffset = new Vector2(0.8f, 0.3f);
         public LayerMask attackableLayer = ~0;
         public Vector2 attackKnockback = new Vector2(4f, 2f);
+
+        [Header("Combat Integration")]
+        [Tooltip("此敌人攻击的阵营标签。Hurtbox 上同阵营不受伤。")]
+        public Faction attackerFaction = Faction.Enemy;
 
         [Header("Stun")]
         public float defaultStunSeconds = 0.4f;
@@ -98,6 +104,7 @@ namespace Game.Framework.AI
                 {
                     _loco.Stop();
                     _attackFired = false; // 每次进入攻击都要重置，否则硬直打断后再攻击 active 帧会被跳过
+                    _hitThisSwing.Clear(); // 清跨帧去重集，支持下次挥击
                     // 攻击开始朝向玩家
                     if (_senses.Target != null)
                         Actor.SetDirection((int)Mathf.Sign(_senses.Target.position.x - transform.position.x));
@@ -218,6 +225,8 @@ namespace Game.Framework.AI
         }
 
         private bool _attackFired;
+        // 跨帧去重：一次挥击内不重复命中同一个 Hurtbox。Attack.OnEnter 处清空。
+        private readonly HashSet<Hurtbox> _hitThisSwing = new HashSet<Hurtbox>();
 
         private void PerformAttackHit()
         {
@@ -225,22 +234,19 @@ namespace Game.Framework.AI
             Vector2 center = (Vector2)transform.position
                            + new Vector2(attackHitboxOffset.x * facing, attackHitboxOffset.y);
 
-            var hits = Physics2D.OverlapCircleAll(center, attackHitboxRadius, attackableLayer);
-            for (int i = 0; i < hits.Length; i++)
+            // 圆形 hitbox 近似成等边方形：边长 = 2 * radius
+            Vector2 size = new Vector2(attackHitboxRadius * 2f, attackHitboxRadius * 2f);
+
+            var template = new DamageInfo
             {
-                var dmg = hits[i].GetComponent<IDamageable>() ?? hits[i].GetComponentInParent<IDamageable>();
-                if (dmg != null && dmg.IsAlive && hits[i].gameObject != gameObject)
-                {
-                    dmg.TakeDamage(new DamageInfo
-                    {
-                        amount = attackDamage,
-                        hitPoint = center,
-                        knockback = new Vector2(attackKnockback.x * facing, attackKnockback.y),
-                        source = gameObject,
-                        stunDuration = 0.2f,
-                    });
-                }
-            }
+                amount = attackDamage,
+                knockback = new Vector2(attackKnockback.x * facing, attackKnockback.y),
+                stunDuration = 0.2f,
+            };
+
+            HitboxQuery.OverlapBox(
+                center, size, 0f, attackableLayer,
+                attackerFaction, template, gameObject, _hitThisSwing);
         }
 
         // ---------- Health 事件 ----------
