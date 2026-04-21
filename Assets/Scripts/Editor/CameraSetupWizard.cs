@@ -109,10 +109,10 @@ namespace Framework.Cameras.EditorTools
                 composer = Undo.AddComponent<CinemachinePositionComposer>(vcam.gameObject);
 
             composer.Damping = new Vector3(1f, 1f, 0f);
-            composer.DeadZone.Enabled = true;
-            composer.DeadZone.Size = new Vector2(0.2f, 0.15f);
-            composer.HardLimits.Enabled = false;
             composer.Composition.ScreenPosition = new Vector2(0f, 0f);
+            composer.Composition.DeadZone.Enabled = true;
+            composer.Composition.DeadZone.Size = new Vector2(0.2f, 0.15f);
+            composer.Composition.HardLimits.Enabled = false;
             composer.CameraDistance = 10f;
             EditorUtility.SetDirty(composer);
             EditorUtility.SetDirty(vcam);
@@ -266,6 +266,145 @@ namespace Framework.Cameras.EditorTools
                     EditorUtility.SetDirty(urpData);
                 }
             }
+        }
+
+        // ==========================================================
+        // 路线二：3D Perspective (2.5D) 配置
+        // ==========================================================
+
+        [MenuItem("Tools/Camera/Apply 3D Perspective")]
+        public static void ApplyPerspective()
+        {
+            var undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Apply 3D Perspective");
+
+            var mainCam = Camera.main;
+            if (mainCam == null)
+            {
+                Debug.LogError("[CameraSetup] 场景里找不到 Main Camera。");
+                return;
+            }
+
+            // 1. Main Camera -> Perspective + FOV 30 + near/far
+            Undo.RecordObject(mainCam, "Main Camera Perspective");
+            mainCam.orthographic = false;
+            mainCam.fieldOfView = 30f;
+            mainCam.nearClipPlane = 0.3f;
+            mainCam.farClipPlane = 1000f;
+            EditorUtility.SetDirty(mainCam);
+
+            // 2. CinemachineCamera-player -> Perspective，位置 Z=-10
+            var playerVcam = FindInScene<CinemachineCamera>(PlayerVcamName);
+            if (playerVcam != null)
+            {
+                Undo.RecordObject(playerVcam.transform, "VCam Z");
+                var pos = playerVcam.transform.position;
+                if (Mathf.Abs(pos.z) < 0.01f || pos.z > 0f) pos.z = -10f;
+                playerVcam.transform.position = pos;
+
+                Undo.RecordObject(playerVcam, "VCam Lens");
+                var lens = playerVcam.Lens;
+                lens.ModeOverride = LensSettings.OverrideModes.Perspective;
+                lens.FieldOfView = 30f;
+                lens.NearClipPlane = 0.3f;
+                lens.FarClipPlane = 1000f;
+                playerVcam.Lens = lens;
+
+                // PositionComposer 在透视下继续可用；CameraDistance 即与目标的距离
+                var composer = playerVcam.GetComponent<CinemachinePositionComposer>();
+                if (composer == null)
+                    composer = Undo.AddComponent<CinemachinePositionComposer>(playerVcam.gameObject);
+                composer.CameraDistance = 10f;
+                EditorUtility.SetDirty(composer);
+                EditorUtility.SetDirty(playerVcam);
+            }
+
+            // 3. 透明排序按距离透视
+            GraphicsSettings.transparencySortMode = TransparencySortMode.Perspective;
+
+            // 4. Volume Profile 加景深 + 调整暗角以配合透视
+            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(ProfilePath);
+            if (profile == null)
+            {
+                if (!Directory.Exists(ProfileFolder)) Directory.CreateDirectory(ProfileFolder);
+                profile = ScriptableObject.CreateInstance<VolumeProfile>();
+                AssetDatabase.CreateAsset(profile, ProfilePath);
+            }
+            if (!profile.TryGet<DepthOfField>(out var dof))
+                dof = profile.Add<DepthOfField>(true);
+            dof.active = true;
+            dof.mode.overrideState = true;
+            dof.mode.value = DepthOfFieldMode.Bokeh;
+            dof.focusDistance.overrideState = true;
+            dof.focusDistance.value = 10f;       // 聚焦在 Z=0 平面（相机在 -10）
+            dof.focalLength.overrideState = true;
+            dof.focalLength.value = 50f;
+            dof.aperture.overrideState = true;
+            dof.aperture.value = 5.6f;
+            EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssets();
+
+            // 5. URP Asset: MSAA 4x + HDR
+            var urp = GraphicsSettings.defaultRenderPipeline as UniversalRenderPipelineAsset;
+            if (urp != null)
+            {
+                Undo.RecordObject(urp, "URP MSAA");
+                urp.msaaSampleCount = 4;
+                EditorUtility.SetDirty(urp);
+            }
+            else
+            {
+                Debug.LogWarning("[CameraSetup] 没找到 UniversalRenderPipelineAsset，MSAA 跳过。");
+            }
+
+            // 6. Main Camera -> 打开 Post Processing（URP 17 的开关在 UniversalAdditionalCameraData）
+            var urpData = mainCam.GetUniversalAdditionalCameraData();
+            if (urpData != null)
+            {
+                Undo.RecordObject(urpData, "Camera Post");
+                urpData.renderPostProcessing = true;
+                urpData.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+                urpData.antialiasingQuality = AntialiasingQuality.High;
+                EditorUtility.SetDirty(urpData);
+            }
+
+            // 7. 给 Player（如果存在）自动挂 DepthLock，锁到 Z=0
+            var playerGo = GameObject.FindGameObjectWithTag("Player");
+            if (playerGo != null && playerGo.GetComponent<Framework.DepthLock>() == null)
+            {
+                var dl = Undo.AddComponent<Framework.DepthLock>(playerGo);
+                dl.targetZ = 0f;
+                EditorUtility.SetDirty(dl);
+            }
+
+            Undo.CollapseUndoOperations(undoGroup);
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            Debug.Log("[CameraSetup] 已切换到 3D Perspective。FOV=30，相机 Z=-10，MSAA 4x，景深已加入 Volume。");
+        }
+
+        [MenuItem("Tools/Camera/Revert To Orthographic")]
+        public static void RevertOrthographic()
+        {
+            var mainCam = Camera.main;
+            if (mainCam == null) return;
+
+            Undo.RecordObject(mainCam, "Main Camera Orthographic");
+            mainCam.orthographic = true;
+            EditorUtility.SetDirty(mainCam);
+
+            var playerVcam = FindInScene<CinemachineCamera>(PlayerVcamName);
+            if (playerVcam != null)
+            {
+                Undo.RecordObject(playerVcam, "VCam Lens");
+                var lens = playerVcam.Lens;
+                lens.ModeOverride = LensSettings.OverrideModes.Orthographic;
+                playerVcam.Lens = lens;
+                EditorUtility.SetDirty(playerVcam);
+            }
+
+            GraphicsSettings.transparencySortMode = TransparencySortMode.Default;
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            Debug.Log("[CameraSetup] 已回到 Orthographic。");
         }
 
         // ---------- 工具 ----------
