@@ -153,16 +153,7 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 
 ---
 
-## 三、对接约定
-
-- 美术不动 `Scripts/`、`ProjectSettings/`。
-- 程序不动 `Art/`（除了拖 Sprite 到 Prefab 上或挂组件）。
-- Prefab 字段需要拖引用的（如 UI View 的 Text 组件、动画 Controller），美术做完后**通知程序拖线**，或自行拖后程序 review。
-- 新增 Layer / Tag / SortingLayer 统一经程序，避免冲突。
-
----
-
-## 四、环境 / 依赖
+## 三、环境 / 依赖
 
 - Unity 6（URP 17.0.4）
 - com.unity.cinemachine 3.1.6（`Unity.Cinemachine` / `CinemachineCamera`）
