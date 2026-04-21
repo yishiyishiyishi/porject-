@@ -55,6 +55,35 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 
 #### 音频
 - `Framework/Audio/AudioManager` + `AudioCue` + `MusicTrack` + `AudioFilterPreset`：BGM / SE / 滤镜预设。
+- `Framework/Audio/AudioEvents`：事件 Facade，业务层走 `AudioEvents.PlaySfx / PlayMusic / ApplyFilter / ClearFilter` 通过 EventBus 调度，不再持 AudioManager 引用。
+
+#### 战斗（Framework/Combat）
+- `Faction` 枚举（Player / Enemy / Neutral / None）+ `IsHostile` 扩展，替代字符串阵营避免笔误。
+- `Hurtbox`：挂在可挨打对象上的锚点，含 faction + IDamageable 引用；不参与物理碰撞，只作为 Hitbox 查询的目标标签。
+- `HitboxQuery.OverlapBox`：攻击方 active 帧调一次，内部 `OverlapBoxNonAlloc`，阵营过滤 + 跨帧去重，命中发 `HitLanded` 到 EventBus。
+
+#### 顿帧 / 时间控制（Framework/Time）
+- `HitStop.Pulse(duration, freezeScale)`：隐藏 DontDestroyOnLoad Driver 协程，`unscaledDeltaTime` 计时把全局 `Time.timeScale` 拉近 0 做打击定格。
+- 和 `ActorState.LocalTimeScale` 搭配：全局冻结用 HitStop，个体慢放 / 时停用 LocalTimeScale。
+
+#### 视角切换（Framework/View，尼尔式横板↔俯视）
+- `ViewMode` 枚举 `Side` / `TopDown`。
+- `ViewModeController`：单例 + `static Current`，`SetMode()` 切换并发 `ViewModeChanged` 到 EventBus；可配 Side/TopDown 对应的 CameraManager key 自动联动相机。
+- `ViewModeTrigger`（Collider2D Trigger）进入 → 切模式，离开可选回切。
+- **保留 Rigidbody2D 物理**（方案 A "伪俯视"）：`JumpModule` 在 TopDown 下早退，`MoveModule` 接管 `Horizontal + Vertical` 驱动 XY 速度。
+- `IPlayerInput.Vertical` 新字段，为俯视模式准备。
+
+#### 对象池（Framework/Pooling）
+- `IPoolable`（可选 OnAcquire/OnRelease 回调）。
+- `ObjectPool<T : Component>`：Stack 内部，prewarm + maxSize，超上限自动销毁。
+- `PoolManager` 单例：`(Type, prefabInstanceID)` 双键索引，`PoolManager.Get<Bullet>(prefab).Acquire(pos, rot)`。弹幕 / 高频生成不再 Instantiate/Destroy 爆 GC。
+
+#### 玩家攻击（Player/Modules/PlayerAttackModule）
+- 三段 `windup → active → recovery` × N 段连招（默认 3 段渐强，参数在组件上可配）。
+- 输入缓冲接招：windup/active/recovery 任意阶段按攻击键排队下一段，recovery 末尾自动接。
+- active 段每 Tick 重判 HitboxQuery，支持目标快速穿过；同次挥击通过 `HashSet<Hurtbox>` 去重。
+- 命中自动 `HitStop.Pulse` + `CameraManager.ShakeQuick`。
+- 尊重 `ActionGate.Attack` 锁（受击硬直 / 冲刺期间不响应）。
 
 #### 敌人 / NPC AI（Framework/AI）
 - `StateMachine<T>`：极简泛型 FSM，链式 `Configure(state).OnEnter/OnTick/OnFixedTick/OnExit`，带 `TimeInState`、`ReenterState()`（连招强制重入）、`OnTransition` 事件。
@@ -73,14 +102,17 @@ Unity 6 + URP + 新 Input System + Cinemachine 3.x。2.5D（透视相机 + 2D Sp
 ### 2. 待做（程序）
 
 - **相机触发网**：关键转场 / Boss 房 / 剧情机位的 `CameraTrigger` 布点，按 `ZDepth` 规范在场景中实际摆位。
-- **帧级战斗反馈**：命中定格、`LocalTimeScale` 短暂拉低、震屏预设分级（轻/中/重）与统一入口。
-- **玩家侧攻击**：`PlayerAttackModule` + hitbox，让已有敌人 `Health` 真正挨打；弹反 / 无敌帧。
-- **Enemy Prefab 向导**：`Tools/AI/Create Enemy Template` 一键装配（GroundSensor + Probe + Senses + Loco + Health + Brain + DepthLock）。
+- **TopDown 相机预设**：在场景 CameraManager 注册一台俯视 CinemachineCamera（key 如 `TopDown`），填到 `ViewModeController.topDownCameraKey`；目前脚本层就绪，但场景里还没有这台相机。
+- **给所有 Actor 挂 `Hurtbox`**：现有 Player / Enemy prefab 补挂 `Hurtbox`(faction + IDamageable)，PlayerAttackModule 才能真正打到他们。
+- **敌人攻击也走 HitboxQuery**：`EnemyBrain.PerformAttackHit` 现在是旧版 `OverlapCircle + GetComponent<IDamageable>` 路径，待重构为 Hurtbox / HitboxQuery 统一路径，复用阵营过滤与去重。
+- **无敌帧 / 弹反 / 命中特效**：受击后短暂 I-frame、完美闪避判定、命中粒子 + 残影。
+- **Enemy Prefab 向导**：`Tools/AI/Create Enemy Template` 一键装配（GroundSensor + Probe + Senses + Loco + Health + Hurtbox + Brain + DepthLock）。
 - **对话分支 / 条件 / 变量**：现在 `SimpleDialogueRunner` 只跑线性对白，需补分支与叙事变量接入 `NarrativeState`。
 - **存档自动点**：`PlayerSavePoint` 接入触发器 + UI 反馈；跨场景状态序列化补完。
 - **性能与体积**：URP Renderer Feature 层的体积光 / 大气（等 URP 官方或自写）；4K 下帧生成优化。
 - **资产管线**：AssetGroups / Addressables 接入，为美术资源热加载铺路。
 - **构建脚本**：Windows/PC 出包 CI。
+- **正经背景美术**：占位的 bg1/2/3 已删，等真正的分层背景图产出后通过 `Tools/Art/Create Parallax Backdrop` 向导摆回场景。
 
 ---
 
