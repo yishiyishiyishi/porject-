@@ -16,7 +16,9 @@ namespace Game.Framework.AI
     /// </summary>
     public class StateMachine<TState>
     {
-        private class Handler
+        // internal 级别就够了 —— 出了 Assembly-CSharp 外部看不见；
+        // 但类型名不再 private，嵌套类字段/参数引用它不会触发 CS0051/CS0052。
+        internal class Handler
         {
             public Action OnEnter;
             public Action<float> OnTick;
@@ -37,7 +39,7 @@ namespace Game.Framework.AI
             public StateBuilder OnExit(Action a)               { _h.OnExit      = a; return this; }
         }
 
-        private readonly Dictionary<TState, Handler> _handlers = new();
+        private readonly Dictionary<TState, Handler> _handlers = new Dictionary<TState, Handler>();
         public TState Current { get; private set; }
         public TState Previous { get; private set; }
         public float TimeInState { get; private set; }

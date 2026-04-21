@@ -84,6 +84,32 @@
 - `LevelLoader` —— 单例，**流程：FadeOut → (可选) AutoSave → LoadSceneAsync(allowSceneActivation=false 卡 0.9) → 激活 → 等一帧 → Teleport 到 SpawnPoint → FadeIn**
 - `LevelPortal` —— Interactable 子类，交互切场景
 
+### Framework/View（尼尔式视角切换）
+- `ViewMode` 枚举：Side（横版）/ TopDown（俯视）
+- `ViewModeController` 单例，`static Current` 可供任意模块读；`SetMode(mode)` 切换，同时可按配置联动 CameraManager 切相机
+- `ViewModeTrigger`（Collider2D Trigger）进入 → SetMode(TopDown)，离开 → 回 Side
+- 事件 `ViewModeChanged` 广播到 EventBus
+- **物理仍旧是 Rigidbody2D（方案 A "伪俯视"）**：TopDown 下 JumpModule 早退，MoveModule 改吃 Horizontal+Vertical 驱动 XY，2D 骨骼不会被压成线
+
+### Framework/Combat（玩家侧攻击打通）
+- `Faction` 枚举（Player/Enemy/Neutral/None）+ `IsHostile` 扩展
+- `Hurtbox`（挂在可被打的对象上，含 faction + IDamageable 引用）
+- `HitboxQuery.OverlapBox(center, size, angle, mask, attackerFaction, template, attacker, alreadyHit)`：攻击方在 active 帧调，内部 OverlapBoxNonAlloc，过滤同阵营 + 跨帧去重，对目标 TakeDamage 并发 `HitLanded` 事件
+- `Player/PlayerAttackModule`：3 段 windup/active/recovery × N 段连招，输入缓冲接招，active 段每 Tick 重判（支持快速穿过），命中自动顿帧 + 轻震
+
+### Framework/Time（顿帧）
+- `HitStop.Pulse(duration, freezeScale=0.01f)`：隐藏 DontDestroyOnLoad Driver 协程，unscaledDeltaTime 计时，把 Time.timeScale 拉近 0 再恢复，配合 Actor `LocalTimeScale` 做个体 / 全局时间控制
+
+### Framework/Pooling（对象池）
+- `IPoolable`（可选 OnAcquire/OnRelease）
+- `ObjectPool<T : Component>`：prefab + prewarm + maxSize，Stack 内部，超上限自动销毁
+- `PoolManager` 单例，key = (Type, prefab InstanceID)，`PoolManager.Get<Bullet>(prefab).Acquire(pos, rot)`
+- 子弹弹幕（未来尼尔 Pod 射击）不再 Instantiate/Destroy 爆 GC
+
+### Framework/Audio（+ 事件 Facade）
+- 新增 `AudioEvents.PlaySfx / PlayMusic / ApplyFilter / ClearFilter`，业务层走 EventBus 发，不持 AudioManager 引用
+- AudioManager 在 Awake 订阅、OnDestroy 退订，无 AudioManager 场景静默失败
+
 ### Framework/AI（敌人 + NPC）
 - `StateMachine<T>` —— 极简泛型 FSM，`Configure().OnEnter/Tick/FixedTick/Exit`，`TimeInState`、`ReenterState()`（连招用）、`OnTransition` 事件
 - `Health` + `IDamageable` + `DamageInfo` —— 通用血量模块（敌我共用），击退覆写 `linearVelocity`，派发 `ActorDamaged`/`ActorDied`
@@ -139,13 +165,16 @@
 ## 待做
 
 - 相机触发网（关键转场/Boss 房/剧情机位布点）
-- 帧级战斗反馈（命中定格、TimeScale 拉低、震屏分级）
-- 完整战斗模块（攻击判定、受击/硬直/无敌帧、敌人 AI 基类）
+- **TopDown 相机预设**：在 CameraManager 注册一个俯视 CinemachineCamera（key 如 "TopDown"），填到 `ViewModeController.topDownCameraKey`
+- **给敌人 Hurtbox**：现有敌人接上 `Hurtbox`(faction=Enemy, damageable=Health) 让 PlayerAttackModule 打得到；对称给 Player 挂 `Hurtbox`(faction=Player) + Health
+- **敌人攻击也走 HitboxQuery**：EnemyBrain.PerformAttackHit 目前直接 OverlapCircle + IDamageable，统一成 Hurtbox + HitboxQuery 后可复用去重 / 阵营过滤
+- 无敌帧 / 弹反
 - 对话分支/条件/变量（现在只线性）
 - SavePoint 触发器 + UI 反馈、跨场景状态序列化补完
 - URP 体积光/大气
 - AssetGroups / Addressables
 - Windows 出包 CI
+- 背景正经资产（bg1/2/3 占位图重做）
 
 **下一个方向候选**（用户尚未决定）：FMOD 音频中间件 / TextMeshPro UI 升级 / 暂停菜单
 

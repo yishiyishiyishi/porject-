@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
+using Game.Core;
 
 namespace Game.Framework.Audio
 {
@@ -63,6 +64,29 @@ namespace Game.Framework.Audio
             _lp = gameObject.AddComponent<AudioLowPassFilter>();   _lp.enabled = false;
             _hp = gameObject.AddComponent<AudioHighPassFilter>();  _hp.enabled = false;
             _dist = gameObject.AddComponent<AudioDistortionFilter>(); _dist.enabled = false;
+
+            // 事件 Facade：业务层通过 AudioEvents.* 发布，不必持本实例引用
+            EventBus.Subscribe<PlaySfxEvent>(OnPlaySfx);
+            EventBus.Subscribe<PlayMusicEvent>(OnPlayMusic);
+            EventBus.Subscribe<StopMusicEvent>(OnStopMusic);
+            EventBus.Subscribe<ApplyAudioFilterEvent>(OnApplyFilter);
+        }
+
+        private void OnDestroy()
+        {
+            EventBus.Unsubscribe<PlaySfxEvent>(OnPlaySfx);
+            EventBus.Unsubscribe<PlayMusicEvent>(OnPlayMusic);
+            EventBus.Unsubscribe<StopMusicEvent>(OnStopMusic);
+            EventBus.Unsubscribe<ApplyAudioFilterEvent>(OnApplyFilter);
+            if (Instance == this) Instance = null;
+        }
+
+        private void OnPlaySfx(PlaySfxEvent e) => PlaySfx(e.Cue, e.WorldPos);
+        private void OnPlayMusic(PlayMusicEvent e) => PlayMusic(e.Track, e.Fade);
+        private void OnStopMusic(StopMusicEvent e) => StopMusic(e.Fade);
+        private void OnApplyFilter(ApplyAudioFilterEvent e)
+        {
+            if (e.Preset == null) ClearFilter(); else ApplyFilter(e.Preset);
         }
 
         private AudioSource CreateSfxSource()

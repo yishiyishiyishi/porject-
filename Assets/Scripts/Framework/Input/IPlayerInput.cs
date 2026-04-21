@@ -13,6 +13,8 @@ namespace Game.Framework.Input
     {
         /// <summary>-1 / 0 / 1。</summary>
         float Horizontal { get; }
+        /// <summary>-1 / 0 / 1。俯视模式下 W/S 驱动的方向轴；横版模式下通常忽略。</summary>
+        float Vertical { get; }
 
         bool JumpHeld { get; }
         float JumpPressedAt { get; }

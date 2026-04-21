@@ -1,5 +1,6 @@
 using UnityEngine;
 using Game.Framework;
+using Game.Framework.View;
 
 namespace Game.Player.Modules
 {
@@ -44,6 +45,9 @@ namespace Game.Player.Modules
         public override void FixedTick(float dt)
         {
             if (_player == null) return;
+            // 俯视模式：跳跃 + 自定义重力全部让位；MoveModule 接管 Y 轴
+            if (ViewModeController.Current == ViewMode.TopDown) return;
+
             Vector2 v = State.Velocity;
 
             // 起跳
