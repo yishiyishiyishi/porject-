@@ -1,5 +1,6 @@
 using UnityEngine;
 using Game.Core;
+using Game.Framework.Input;
 
 namespace Game.Framework.Interaction
 {
@@ -21,7 +22,7 @@ namespace Game.Framework.Interaction
 
         public override int Order => 50; // 在移动/跳跃之后
 
-        private PlayerActor _player;
+        private IPlayerInput _input;
         private Interactable _current;
         private readonly Collider2D[] _hitBuffer = new Collider2D[16];
 
@@ -30,20 +31,22 @@ namespace Game.Framework.Interaction
         public override void OnAttach(Actor actor)
         {
             base.OnAttach(actor);
-            _player = (PlayerActor)actor;
+            _input = actor.GetComponent<IPlayerInput>();
+            if (_input == null)
+                Debug.LogWarning($"[InteractorModule] {actor.name} has no IPlayerInput component.");
         }
 
         public override void FixedTick(float dt)
         {
             RefreshCandidate();
 
-            if (_current == null) return;
-            bool buffered = Time.time - _player.Input.InteractPressedAt <= inputBufferTime;
+            if (_current == null || _input == null) return;
+            bool buffered = Time.time - _input.InteractPressedAt <= inputBufferTime;
             if (!buffered) return;
             if (!_current.CanInteract(this)) return;
             if (Gate.IsBlocked(ActionTag.Move)) return; // 冲刺/击退中屏蔽交互
 
-            _player.Input.ConsumeInteract();
+            _input.ConsumeInteract();
             var target = _current;
             EventBus.Publish(new InteractPerformed(target));
             target.Interact(this);
