@@ -46,4 +46,12 @@ namespace Game.Framework.Save
         public readonly MetaSaveData Data;
         public MetaSaved(MetaSaveData data) { Data = data; }
     }
+
+    /// <summary>玩家主动删档（WipeSlotsOnly）完成。Meta 未动，wipeCount 已累加。
+    /// 叙事层可据此触发"你以为你能逃走？"这类 meta 桥段。</summary>
+    public readonly struct SlotsWiped
+    {
+        public readonly int WipeCount;
+        public SlotsWiped(int count) { WipeCount = count; }
+    }
 }

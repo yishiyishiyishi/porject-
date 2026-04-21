@@ -27,7 +27,8 @@ namespace Game.Player.Modules
         public override void OnAttach(Actor actor)
         {
             base.OnAttach(actor);
-            _player = (PlayerActor)actor;
+            _player = actor as PlayerActor;
+            if (_player == null) Debug.LogError($"[DashModule] {name} 必须挂在 PlayerActor 上", this);
         }
 
         public override void Tick(float dt)
@@ -37,6 +38,7 @@ namespace Game.Player.Modules
 
         public override void FixedTick(float dt)
         {
+            if (_player == null) return;
             if (_isDashing)
             {
                 StepDash(dt);

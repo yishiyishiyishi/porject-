@@ -43,8 +43,14 @@ namespace Game.Core
 
         public static void Publish<T>(T evt)
         {
-            if (_handlers.TryGetValue(typeof(T), out var d) && d is Action<T> a)
-                a.Invoke(evt);
+            if (!_handlers.TryGetValue(typeof(T), out var d) || !(d is Action<T> a)) return;
+            // 逐个派发：单个订阅者抛异常不应阻断其他订阅者（单体游戏里很容易一处错误级联挂整条事件链）
+            var list = a.GetInvocationList();
+            for (int i = 0; i < list.Length; i++)
+            {
+                try { ((Action<T>)list[i]).Invoke(evt); }
+                catch (Exception ex) { UnityEngine.Debug.LogException(ex); }
+            }
         }
 
         // 域重载时清空，避免 Editor 下 Domain Reload Off 的悬挂订阅

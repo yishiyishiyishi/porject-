@@ -21,11 +21,13 @@ namespace Game.Player.Modules
         public override void OnAttach(Actor actor)
         {
             base.OnAttach(actor);
-            _player = (PlayerActor)actor;
+            _player = actor as PlayerActor;
+            if (_player == null) Debug.LogError($"[MoveModule] {name} 必须挂在 PlayerActor 上", this);
         }
 
         public override void FixedTick(float dt)
         {
+            if (_player == null) return;
             if (Gate.IsBlocked(ActionTag.Move)) return;
 
             float inp = _player.Input.Horizontal;

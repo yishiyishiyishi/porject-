@@ -19,6 +19,7 @@ namespace Game.Framework
     public class NarrativeRuntime : MonoBehaviour
     {
         public static NarrativeState State { get; private set; }
+        private static NarrativeRuntime _instance;
 
         [SerializeField] private NarrativeState stateAsset;
         [SerializeField] private bool dontDestroyOnLoad = true;
@@ -29,7 +30,9 @@ namespace Game.Framework
 
         private void Awake()
         {
-            if (State != null && State != stateAsset) { Destroy(gameObject); return; }
+            // 严格单例：任何重复实例直接销毁，避免重复 Subscribe 造成事件二次触发
+            if (_instance != null && _instance != this) { Destroy(gameObject); return; }
+            _instance = this;
             State = stateAsset;
             if (dontDestroyOnLoad) DontDestroyOnLoad(gameObject);
 
@@ -44,8 +47,10 @@ namespace Game.Framework
 
         private void OnDestroy()
         {
+            if (_instance != this) return;
             EventBus.Unsubscribe<MetaLoaded>(OnMetaLoaded);
             if (State == stateAsset) State = null;
+            _instance = null;
         }
 
         private void OnMetaLoaded(MetaLoaded evt)

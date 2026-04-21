@@ -59,6 +59,8 @@ namespace Game.Framework.Save
         public int schemaVersion = 1;
         public int totalBoots;
         public int totalDeaths;
+        public int slotWipeCount;        // 玩家主动清空 slot 的次数 —— meta 叙事核心"系统记得你删过档"
+        public string lastSlotWipeIso;   // 最近一次删档时间
         public bool glitchDiscovered;
         public List<string> endingsReached = new List<string>();
         public List<string> persistentFlags = new List<string>(); // 跨周目永久的标记

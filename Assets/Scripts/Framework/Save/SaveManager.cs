@@ -167,13 +167,38 @@ namespace Game.Framework.Save
             // 不立即落盘，避免频繁 IO；下次 SaveSlot / 退出时会保存
         }
 
-        /// <summary>危险操作：清除所有存档（包括 Meta）。一般只给开发者菜单用。</summary>
+        /// <summary>
+        /// 玩家向：只删 slot 存档，Meta 完整保留。
+        /// 这是"系统记得你删过档"机制的入口 —— Meta 会记录本次删档并累加 slotWipeCount。
+        /// 游戏内"删除存档"按钮应该调这个，而不是 WipeAll。
+        /// </summary>
+        public void WipeSlotsOnly()
+        {
+            if (!Directory.Exists(SavesDir)) Directory.CreateDirectory(SavesDir);
+            try
+            {
+                var files = Directory.GetFiles(SavesDir, "slot_*.json");
+                for (int i = 0; i < files.Length; i++) File.Delete(files[i]);
+                // 顺便清 .tmp 残留，避免下次启动误读
+                var tmps = Directory.GetFiles(SavesDir, "slot_*.json.tmp");
+                for (int i = 0; i < tmps.Length; i++) File.Delete(tmps[i]);
+            }
+            catch (Exception ex) { Debug.LogError($"[Save] wipe slots failed: {ex.Message}"); }
+
+            _meta.slotWipeCount++;
+            _meta.lastSlotWipeIso = DateTime.UtcNow.ToString("o");
+            SaveMeta();
+            EventBus.Publish(new SlotsWiped(_meta.slotWipeCount));
+        }
+
+        /// <summary>开发者向：清掉一切，包括 Meta。一般只给 debug 菜单/QA 用。</summary>
         public void WipeAll()
         {
             if (Directory.Exists(SavesDir))
                 try { Directory.Delete(SavesDir, true); }
                 catch (Exception ex) { Debug.LogError($"[Save] wipe failed: {ex.Message}"); }
             Directory.CreateDirectory(SavesDir);
+            // totalBoots 不重置：它记录的是"这台机器启动过多少次游戏"，与存档无关
             _meta = new MetaSaveData { totalBoots = _meta.totalBoots };
             WriteJson(MetaPath, _meta);
         }
@@ -225,7 +250,11 @@ namespace Game.Framework.Save
             string json = data.GetBlob(id);
             if (string.IsNullOrEmpty(json)) return null;
             try { return JsonUtility.FromJson<T>(json); }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Save] blob '{id}' parse failed: {ex.Message}");
+                return null;
+            }
         }
     }
 }

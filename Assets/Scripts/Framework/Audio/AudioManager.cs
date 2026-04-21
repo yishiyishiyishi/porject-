@@ -151,8 +151,6 @@ namespace Game.Framework.Audio
             newSrc.volume = 0f;
             newSrc.Play();
 
-            MoveFiltersTo(newSrc);
-
             StartCoroutine(FadeSource(newSrc, MusicTarget(track), fadeIn));
             if (oldSrc.isPlaying) StartCoroutine(FadeAndStop(oldSrc, fadeOut));
         }
@@ -193,8 +191,8 @@ namespace Game.Framework.Audio
         // ---------- Filter ----------
         public void ApplyFilter(AudioFilterPreset preset)
         {
-            _currentPreset = preset;
             if (preset == null) preset = AudioFilterDefaults.Passthrough;
+            _currentPreset = preset;
             StartCoroutine(TransitionFilter(preset, preset.transitionTime));
         }
 
@@ -227,13 +225,8 @@ namespace Game.Framework.Audio
             }
         }
 
-        private void MoveFiltersTo(AudioSource target)
-        {
-            // LowPass/HighPass/Distortion 挂在 AudioManager 对象上，对整条 AudioListener 链生效；
-            // 但如果只想作用于 BGM，需要把滤镜挂到 BGM 源对象上。
-            // 这里为了简化，全部挂本对象 —— 实际会作用在所有子 AudioSource 上。
-            // 若需要区分 BGM/SFX，切 Unity AudioMixer 的 snapshots。
-        }
+        // 注：LowPass/HighPass/Distortion 挂在 AudioManager 自身，作用于所有子 AudioSource（BGM+SFX）。
+        // 如需仅作用于 BGM，用 AudioMixer snapshots 替代。
 
         // ---------- Utility ----------
         public void PauseAll()  { AudioListener.pause = true; }
