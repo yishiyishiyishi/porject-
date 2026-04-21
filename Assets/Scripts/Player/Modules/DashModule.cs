@@ -1,0 +1,91 @@
+using UnityEngine;
+using Game.Framework;
+using Game.Player.Data;
+
+namespace Game.Player.Modules
+{
+    /// <summary>
+    /// 冲刺：AnimationCurve 驱动的强制位移。启动时锁 Move 防止横向控制干扰。
+    /// 无敌处理交给外部伤害模块订阅 DashStarted/DashEnded 事件。
+    /// </summary>
+    public class DashModule : ActorModule
+    {
+        public Displacement dashDisplacement;
+        public float cooldown = 0.3f;
+        public float inputBufferTime = 0.2f;
+
+        public override int Order => 30; // 在 Move / Jump 之后，可覆盖其结果
+
+        private PlayerActor _player;
+        private float _cooldownTimer;
+        private float _dashElapsed;
+        private bool _isDashing;
+        private int _dashDir;
+
+        public bool IsDashing => _isDashing;
+
+        public override void OnAttach(Actor actor)
+        {
+            base.OnAttach(actor);
+            _player = (PlayerActor)actor;
+        }
+
+        public override void Tick(float dt)
+        {
+            _cooldownTimer = Mathf.Max(0f, _cooldownTimer - dt);
+        }
+
+        public override void FixedTick(float dt)
+        {
+            if (_isDashing)
+            {
+                StepDash(dt);
+                return;
+            }
+
+            if (dashDisplacement == null) return;
+            if (_cooldownTimer > 0f) return;
+            if (Gate.IsBlocked(ActionTag.Dash)) return;
+
+            bool buffered = Time.time - _player.Input.DashPressedAt <= inputBufferTime;
+            if (buffered)
+            {
+                _player.Input.ConsumeDash();
+                StartDash();
+            }
+        }
+
+        private void StartDash()
+        {
+            _isDashing = true;
+            _dashElapsed = 0f;
+            _dashDir = State.Direction;
+            Gate.Block(ActionTag.Move, dashDisplacement.length);
+            Gate.Block(ActionTag.Dash, dashDisplacement.length + cooldown);
+            Core.EventBus.Publish(new DashStarted());
+        }
+
+        private void StepDash(float dt)
+        {
+            _dashElapsed += dt;
+            float t = _dashElapsed / dashDisplacement.length;
+            if (t >= 1f) { EndDash(); return; }
+
+            float factor = dashDisplacement.speedCurve.Evaluate(t);
+            var v = State.Velocity;
+            v.x = _dashDir * dashDisplacement.maxSpeed * factor;
+            if (dashDisplacement.zeroGravity) v.y = 0f;
+            State.Velocity = v;
+        }
+
+        private void EndDash()
+        {
+            _isDashing = false;
+            _cooldownTimer = cooldown;
+            Core.EventBus.Publish(new DashEnded());
+        }
+    }
+
+    public readonly struct DashStarted { }
+    public readonly struct DashEnded { }
+}
